@@ -1,6 +1,5 @@
 import aiosqlite
 import os
-import json
 from datetime import datetime, timedelta
 from config import DB_PATH, ADMIN_IDS
 
@@ -178,7 +177,6 @@ async def get_analytics():
             ).fetchone()
         )["c"]
 
-        now_str = datetime.utcnow().isoformat()
         day_ago = (datetime.utcnow() - timedelta(days=1)).isoformat()
         week_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
         month_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
