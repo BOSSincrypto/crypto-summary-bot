@@ -1,4 +1,4 @@
-app = "crypto-summary-bot"
+app = "crypto-price-summary-bot"
 primary_region = "ams"
 
 [build]
