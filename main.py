@@ -29,14 +29,39 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+bot_loop = None
+bot_application = None
+
+
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+        if self.path == "/trigger" and bot_loop and bot_application:
+            import asyncio as _asyncio
+            try:
+                future = _asyncio.run_coroutine_threadsafe(
+                    _run_trigger_summary(bot_application), bot_loop
+                )
+                future.result(timeout=120)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"Summary sent")
+            except Exception as exc:
+                logger.error("Trigger summary failed: %s", exc)
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(b"Error")
+        else:
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
 
     def log_message(self, format, *args):
         pass
+
+
+async def _run_trigger_summary(application):
+    from handlers import scheduled_summary as _sched
+    await _sched(application)
 
 
 def run_health_server():
@@ -47,6 +72,9 @@ def run_health_server():
 
 
 async def post_init(application: Application):
+    global bot_loop, bot_application
+    bot_loop = asyncio.get_event_loop()
+    bot_application = application
     await init_db()
     jq = application.job_queue
     jq.run_daily(
@@ -60,7 +88,7 @@ async def post_init(application: Application):
         name="evening_summary",
     )
     logger.info(
-        "Scheduled summaries at %02d:00 UTC and %02d:00 UTC",
+        "Сводки запланированы на %02d:00 UTC и %02d:00 UTC",
         MORNING_HOUR_UTC,
         EVENING_HOUR_UTC,
     )
@@ -85,7 +113,7 @@ def main():
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    logger.info("Bot starting...")
+    logger.info("Бот запускается...")
     app.run_polling(drop_pending_updates=True)
 
 
