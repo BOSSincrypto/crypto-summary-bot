@@ -44,7 +44,10 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics(created_at);
             CREATE INDEX IF NOT EXISTS idx_users_telegram ON users(telegram_id);
         """)
-        for sym, name, slug in [("OWB", "OWB", "owb"), ("RAINBOW", "Rainbow", "rainbow")]:
+        await conn.execute(
+            "UPDATE coins SET symbol = 'RNBW' WHERE symbol = 'RAINBOW' AND cmc_slug = 'rainbow'"
+        )
+        for sym, name, slug in [("OWB", "OWB", "owb"), ("RNBW", "Rainbow", "rainbow")]:
             cur = await conn.execute("SELECT id FROM coins WHERE symbol = ?", (sym,))
             row = await cur.fetchone()
             if not row:
