@@ -1,0 +1,20 @@
+name: Trigger Crypto Summary
+ 
+on:
+  schedule:
+    - cron: '0 5 * * *'
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+ 
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger summary
+        run: |
+          echo "Triggering summary at $(date -u)"
+          HTTP_CODE=$(curl --max-time 180 -s -o /dev/null -w "%{http_code}" https://crypto-price-summary-bot.fly.dev/trigger)
+          echo "Response code: $HTTP_CODE"
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Warning: trigger returned $HTTP_CODE"
+          fi
