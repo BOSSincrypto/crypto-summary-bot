@@ -61,7 +61,6 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 async def _run_trigger_summary(application):
     from handlers import scheduled_summary as _sched
-    from telegram.ext import ContextTypes
     await _sched(application)
 
 
