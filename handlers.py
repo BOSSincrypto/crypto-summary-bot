@@ -2,7 +2,7 @@ import logging
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
-from config import BOT_PASSWORD, EVM_ADDRESS
+from config import EVM_ADDRESS
 import db
 import services
 
@@ -20,7 +20,7 @@ WELCOME_TEXT = (
     "<b>Добро пожаловать в Крипто Сводка Бот!</b>\n\n"
     "Этот бот предоставляет ежедневные сводки по отслеживаемым криптовалютам "
     "с AI-анализом, новостями и упоминаниями в Twitter.\n\n"
-    "<b>Для начала работы введите пароль доступа:</b>"
+    "Используйте меню ниже или отправьте сообщение для общения с AI."
 )
 
 HELP_TEXT = (
@@ -99,32 +99,23 @@ async def split_send(update_or_chat, text: str, context: ContextTypes.DEFAULT_TY
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await db.get_or_create_user(user.id, user.username, user.first_name)
+    await db.authenticate_user(user.id)
     await db.log_action(user.id, "start")
-
-    if await db.is_authenticated(user.id):
-        admin = await db.is_admin(user.id)
-        await update.message.reply_text(
-            "<b>С возвращением!</b>\nИспользуйте меню ниже или отправьте сообщение для общения с AI.",
-            parse_mode=ParseMode.HTML,
-            reply_markup=get_main_keyboard(admin),
-        )
-    else:
-        await update.message.reply_text(WELCOME_TEXT, parse_mode=ParseMode.HTML)
+    admin = await db.is_admin(user.id)
+    await update.message.reply_text(
+        WELCOME_TEXT,
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_main_keyboard(admin),
+    )
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await db.is_authenticated(update.effective_user.id):
-        await update.message.reply_text("Сначала введите пароль. Используйте /start")
-        return
     await db.log_action(update.effective_user.id, "help")
     await update.message.reply_text(HELP_TEXT, parse_mode=ParseMode.HTML)
 
 
 async def summary_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    if not await db.is_authenticated(uid):
-        await update.message.reply_text("Сначала введите пароль. Используйте /start")
-        return
     await db.log_action(uid, "summary")
     msg = await update.message.reply_text("Генерирую сводку... Пожалуйста, подождите.")
     try:
@@ -138,9 +129,6 @@ async def summary_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def coins_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    if not await db.is_authenticated(uid):
-        await update.message.reply_text("Сначала введите пароль. Используйте /start")
-        return
     await db.log_action(uid, "coins")
     coins = await db.get_active_coins()
     if not coins:
@@ -155,9 +143,6 @@ async def coins_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def support_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    if not await db.is_authenticated(uid):
-        await update.message.reply_text("Сначала введите пароль. Используйте /start")
-        return
     await db.log_action(uid, "support")
     text = (
         "<b>Поддержать проект</b>\n\n"
@@ -287,18 +272,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await db.get_or_create_user(uid, user.username, user.first_name)
 
     if not await db.is_authenticated(uid):
-        if text == BOT_PASSWORD:
-            await db.authenticate_user(uid)
-            await db.log_action(uid, "auth_success")
-            admin = await db.is_admin(uid)
-            await update.message.reply_text(
-                "Доступ разрешён! Добро пожаловать!\n\nИспользуйте меню ниже или отправьте сообщение для общения с AI.",
-                reply_markup=get_main_keyboard(admin),
-            )
-        else:
-            await db.log_action(uid, "auth_fail")
-            await update.message.reply_text("Неверный пароль. Попробуйте снова или используйте /start.")
-        return
+        await db.authenticate_user(uid)
 
     state = user_states.get(uid)
     if state:

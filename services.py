@@ -116,42 +116,30 @@ def _parse_coin_data(coin: dict) -> dict:
     }
 
 
-async def search_crypto_news(query: str, max_results: int = 10) -> list[dict]:
+async def search_crypto_news(symbol: str, max_results: int = 5) -> list[dict]:
     results = []
     try:
-        results = await _search_ddg(f"{query} crypto news", max_results)
+        results = await _search_ddg(f'"{symbol}" crypto token news', max_results)
     except Exception as e:
         logger.warning("DDG news search failed: %s", e)
-    if len(results) < 3:
-        try:
-            extra = await _search_cryptocompare(query)
-            results.extend(extra)
-        except Exception as e:
-            logger.warning("CryptoCompare news failed: %s", e)
     return results[:max_results]
 
 
-async def search_twitter_mentions(query: str, max_results: int = 6) -> list[dict]:
+async def search_twitter_mentions(symbol: str, max_results: int = 4) -> list[dict]:
     results = []
     try:
         results = await _search_ddg(
-            f"{query} crypto site:x.com OR site:twitter.com", max_results
+            f'"{symbol}" crypto site:x.com OR site:twitter.com', max_results
         )
     except Exception as e:
         logger.warning("Twitter search failed: %s", e)
-    if len(results) < 2:
-        try:
-            extra = await _search_ddg(f"{query} token twitter", max_results)
-            results.extend(extra)
-        except Exception as e:
-            logger.warning("Twitter fallback search failed: %s", e)
     return results[:max_results]
 
 
-async def search_whale_alerts(query: str) -> list[dict]:
+async def search_whale_alerts(symbol: str) -> list[dict]:
     results = []
     try:
-        results = await _search_ddg(f"{query} whale alert large transaction", 5)
+        results = await _search_ddg(f'"{symbol}" whale alert large transaction', 3)
     except Exception as e:
         logger.warning("Whale alert search failed: %s", e)
     return results
@@ -212,24 +200,17 @@ async def generate_ai_summary(crypto_data: dict, news_data: dict, twitter_data: 
         return _format_raw_summary(crypto_data, news_data, twitter_data)
 
     system_prompt = (
-        "Ты - профессиональный криптоаналитик. Проанализируй данные и создай подробную сводку НА РУССКОМ ЯЗЫКЕ.\n"
-        "ВАЖНО: Используй ТОЛЬКО теги <b>, <i>, <code> для форматирования в Telegram. "
-        "НЕ используй <html>, <head>, <body>, <div>, <style>, <h1>-<h6>, <ul>, <li>, <p>. "
-        "Используй переносы строк и эмодзи для оформления.\n\n"
-        "Структура сводки:\n"
-        "1. ОБЗОР ЦЕН - текущая цена, изменение за 1ч/24ч/7д/30д для каждой монеты\n"
-        "2. АНАЛИЗ ОБЪЁМОВ - объём торгов за 24ч, изменение объёма, давление покупателей/продавцов\n"
-        "3. КРУПНЫЕ ОПЕРАЦИИ - анализ крупных покупок/продаж на основе объёмов и движения цены. "
-        "Если объём вырос на >20% при росте цены = крупные покупки. "
-        "Если объём вырос при падении цены = крупные продажи. Оцени масштаб операций.\n"
-        "4. РЫНОЧНАЯ КАПИТАЛИЗАЦИЯ - market cap, FDV, доля рынка, оборотное предложение\n"
-        "5. САММАРИ НОВОСТЕЙ - подробное изложение каждой найденной новости на русском языке (2-3 предложения на каждую)\n"
-        "6. УПОМИНАНИЯ В TWITTER - краткий обзор найденных упоминаний\n"
-        "7. WHALE ALERTS - информация о крупных транзакциях если найдена\n"
-        "8. НАСТРОЕНИЕ РЫНКА - общая оценка sentiment\n"
-        "9. КЛЮЧЕВЫЕ ВЫВОДЫ И РЕКОМЕНДАЦИИ\n\n"
-        "Форматируй числа красиво: $1,234.56. Проценты со знаком: +5.2% или -3.1%. "
-        "Если данных нет - укажи это явно. Будь подробным и информативным."
+        "Ты - криптоаналитик. Создай КРАТКУЮ сводку НА РУССКОМ.\n"
+        "Форматирование: ТОЛЬКО <b>, <i>, <code>. НЕ используй <html>, <div>, <h1>-<h6>, <ul>, <li>, <p>.\n"
+        "Используй эмодзи и переносы строк.\n\n"
+        "ВАЖНО: Пиши ТОЛЬКО о токенах OWB и RNBW (Rainbow). НЕ путай их с другими токенами (XRP, BTC и т.д.). "
+        "Если новость не относится к OWB или RNBW - пропусти её.\n\n"
+        "Структура:\n"
+        "1. ЦЕНЫ - цена, изменение 1ч/24ч/7д, объём, давление\n"
+        "2. КРУПНЫЕ СДЕЛКИ - анализ по объёмам\n"
+        "3. НОВОСТИ - кратко по 1-2 предложения на каждую\n"
+        "4. ВЫВОД - 2-3 предложения\n\n"
+        "Будь кратким. Формат: $1,234.56, +5.2%, -3.1%. Если данных нет - укажи."
     )
 
     user_content = json.dumps(
@@ -259,7 +240,7 @@ async def generate_ai_summary(crypto_data: dict, news_data: dict, twitter_data: 
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content},
                     ],
-                    "max_tokens": 4000,
+                    "max_tokens": 2000,
                     "temperature": 0.3,
                 },
             )
@@ -333,12 +314,10 @@ async def generate_full_summary() -> str:
     twitter_data = {}
     whale_data = {}
     for c in coins:
-        name = c["name"]
         sym = c["symbol"]
-        search_term = name if name != sym else sym
-        news_data[sym] = await search_crypto_news(search_term)
-        twitter_data[sym] = await search_twitter_mentions(search_term)
-        whale_data[sym] = await search_whale_alerts(search_term)
+        news_data[sym] = await search_crypto_news(sym)
+        twitter_data[sym] = await search_twitter_mentions(sym)
+        whale_data[sym] = await search_whale_alerts(sym)
 
     summary = await generate_ai_summary(crypto_data, news_data, twitter_data, whale_data)
     timestamp = datetime.utcnow().strftime("%d.%m.%Y %H:%M UTC")
