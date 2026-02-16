@@ -1,6 +1,5 @@
 import aiosqlite
 import os
-import json
 from datetime import datetime, timedelta
 from config import DB_PATH, ADMIN_IDS
 
@@ -45,11 +44,19 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics(created_at);
             CREATE INDEX IF NOT EXISTS idx_users_telegram ON users(telegram_id);
         """)
-        for sym, name in [("OWB", "OWB"), ("RAINBOW", "Rainbow")]:
-            await conn.execute(
-                "INSERT OR IGNORE INTO coins (symbol, name) VALUES (?, ?)",
-                (sym, name),
-            )
+        for sym, name, slug in [("OWB", "OWB", "owb"), ("RAINBOW", "Rainbow", "rainbow")]:
+            cur = await conn.execute("SELECT id FROM coins WHERE symbol = ?", (sym,))
+            row = await cur.fetchone()
+            if not row:
+                await conn.execute(
+                    "INSERT INTO coins (symbol, name, cmc_slug) VALUES (?, ?, ?)",
+                    (sym, name, slug),
+                )
+            else:
+                await conn.execute(
+                    "UPDATE coins SET cmc_slug = ? WHERE symbol = ? AND (cmc_slug IS NULL OR cmc_slug = '')",
+                    (slug, sym),
+                )
         await conn.commit()
     finally:
         await conn.close()
@@ -178,7 +185,6 @@ async def get_analytics():
             ).fetchone()
         )["c"]
 
-        now_str = datetime.utcnow().isoformat()
         day_ago = (datetime.utcnow() - timedelta(days=1)).isoformat()
         week_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
         month_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
