@@ -19,6 +19,7 @@ async def get_crypto_quotes(coins: list[dict]) -> dict:
 
     slugs = [c["cmc_slug"] for c in coins if c.get("cmc_slug")]
     symbols = [c["symbol"] for c in coins if not c.get("cmc_slug")]
+    slug_to_local = {c["cmc_slug"]: c["symbol"] for c in coins if c.get("cmc_slug")}
     result = {}
     headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY, "Accept": "application/json"}
 
@@ -35,8 +36,9 @@ async def get_crypto_quotes(coins: list[dict]) -> dict:
                     for _cmc_id, coin_data in data.get("data", {}).items():
                         if isinstance(coin_data, list):
                             coin_data = coin_data[0]
-                        sym = coin_data.get("symbol", "")
-                        result[sym] = _parse_coin_data(coin_data)
+                        cmc_slug = coin_data.get("slug", "")
+                        local_sym = slug_to_local.get(cmc_slug, coin_data.get("symbol", ""))
+                        result[local_sym] = _parse_coin_data(coin_data)
 
             if symbols:
                 resp = await client.get(
@@ -173,25 +175,6 @@ async def _search_ddg(query: str, max_results: int = 8) -> list[dict]:
                 results.append(
                     {"title": clean_title, "url": href, "snippet": clean_snippet}
                 )
-        return results
-
-
-async def _search_cryptocompare(query: str) -> list[dict]:
-    url = "https://min-api.cryptocompare.com/data/v2/news/"
-    params = {"lang": "EN", "categories": query, "sortOrder": "latest"}
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(url, params=params)
-        data = resp.json()
-        results = []
-        for item in data.get("Data", [])[:5]:
-            results.append(
-                {
-                    "title": item.get("title", ""),
-                    "url": item.get("url", ""),
-                    "snippet": item.get("body", "")[:300],
-                    "source": item.get("source", ""),
-                }
-            )
         return results
 
 
